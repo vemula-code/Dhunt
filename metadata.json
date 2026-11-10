@@ -1,0 +1,6 @@
+{
+  "name": "DealHunter",
+  "description": "Personal AI-powered deal intelligence and price-glitch monitoring platform with real-time notification ingestion, custom rules, and instant alerts.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
