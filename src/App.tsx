@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Deal,
   CapturedNotification,
@@ -15,21 +15,18 @@ import {
   generateSimulatedNotification,
   generateDuplicateNotification,
 } from './services/simulatedFeed';
-import { Header, NavTab } from './components/Header';
+import { Header, SimpleNavTab } from './components/Header';
 import { DashboardView } from './components/views/DashboardView';
 import { DealsView } from './components/views/DealsView';
 import { NotificationsView } from './components/views/NotificationsView';
-import { AccountsView } from './components/views/AccountsView';
-import { RulesView } from './components/views/RulesView';
-import { PurchasesView } from './components/views/PurchasesView';
-import { SettingsView } from './components/views/SettingsView';
+import { ConnectPhoneView } from './components/views/ConnectPhoneView';
 import { DealDetailModal } from './components/DealDetailModal';
 import { AndroidCompanionModal } from './components/AndroidCompanionModal';
 import { ManualIngestModal } from './components/ManualIngestModal';
 import { Zap, X, ExternalLink, Bookmark, CheckCircle2, ShoppingBag } from 'lucide-react';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<SimpleNavTab>('deals');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [notifications, setNotifications] = useState<CapturedNotification[]>([]);
   const [accounts, setAccounts] = useState<XAccount[]>([]);
@@ -159,28 +156,6 @@ export default function App() {
       await dbService.saveNotification(updatedNotif);
       await dbService.saveDeal(newDeal);
 
-      // Auto stage purchase if rule triggered or autoPurchase is active
-      if (
-        (newDeal.purchasePrepared || (settings.autoPurchase.enabled && newDeal.score >= 80)) &&
-        newDeal.product.dealPrice !== null &&
-        newDeal.product.dealPrice <= settings.autoPurchase.maxPricePerItem
-      ) {
-        const purchaseRecord: PurchaseRecord = {
-          id: `purch-${Date.now()}`,
-          dealId: newDeal.id,
-          productName: newDeal.product.productName,
-          retailer: newDeal.product.retailer,
-          price: newDeal.product.dealPrice,
-          originalPrice: newDeal.product.originalPrice,
-          discountPercentage: newDeal.product.discountPercentage,
-          productUrl: newDeal.product.productUrl || '#',
-          preparedAt: Date.now(),
-          status: 'prepared',
-        };
-        await dbService.savePurchase(purchaseRecord);
-        setPurchases((prev) => [purchaseRecord, ...prev]);
-      }
-
       // 5. Update local React states
       setDeals((prev) => [newDeal, ...prev.filter((d) => d.id !== newDeal.id)]);
       setNotifications((prev) => [updatedNotif, ...prev.filter((n) => n.id !== updatedNotif.id)]);
@@ -280,18 +255,7 @@ export default function App() {
     await dbService.savePurchase(purchaseRecord);
     setPurchases((prev) => [purchaseRecord, ...prev]);
 
-    // Update daily spent in settings
-    const updatedSettings: AppSettings = {
-      ...settings,
-      autoPurchase: {
-        ...settings.autoPurchase,
-        currentDailySpent: settings.autoPurchase.currentDailySpent + (deal.product.dealPrice || 0),
-      },
-    };
-    await dbService.saveSettings(updatedSettings);
-    setSettings(updatedSettings);
-
-    alert(`Marked "${deal.product.productName}" as purchased! Added to purchase records.`);
+    alert(`Marked "${deal.product.productName}" as purchased!`);
   };
 
   const handleReportIncorrect = async (dealId: string) => {
@@ -301,56 +265,7 @@ export default function App() {
     await dbService.saveDeal(updated);
     setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
     setSelectedDeal(updated);
-    alert('Thank you! Feedback recorded for model tuning.');
-  };
-
-  // Rule management handlers
-  const handleSaveRule = async (rule: CustomRule) => {
-    await dbService.saveRule(rule);
-    setRules((prev) => [rule, ...prev.filter((r) => r.id !== rule.id)]);
-  };
-
-  const handleDeleteRule = async (id: string) => {
-    await dbService.deleteRule(id);
-    setRules((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  // Account management handlers
-  const handleSaveAccount = async (account: XAccount) => {
-    await dbService.saveAccount(account);
-    setAccounts((prev) => [account, ...prev.filter((a) => a.username !== account.username)]);
-  };
-
-  const handleDeleteAccount = async (username: string) => {
-    await dbService.deleteAccount(username);
-    setAccounts((prev) => prev.filter((a) => a.username !== username));
-  };
-
-  // Purchases handlers
-  const handleConfirmPurchase = async (id: string) => {
-    const p = purchases.find((item) => item.id === id);
-    if (!p) return;
-    const updated: PurchaseRecord = {
-      ...p,
-      status: 'user_confirmed',
-      confirmedAt: Date.now(),
-    };
-    await dbService.savePurchase(updated);
-    setPurchases((prev) => prev.map((item) => (item.id === id ? updated : item)));
-  };
-
-  const handleCancelPurchase = async (id: string) => {
-    const p = purchases.find((item) => item.id === id);
-    if (!p) return;
-    const updated: PurchaseRecord = { ...p, status: 'cancelled' };
-    await dbService.savePurchase(updated);
-    setPurchases((prev) => prev.map((item) => (item.id === id ? updated : item)));
-  };
-
-  // Settings update handler
-  const handleUpdateSettings = async (newSettings: AppSettings) => {
-    await dbService.saveSettings(newSettings);
-    setSettings(newSettings);
+    alert('Feedback recorded for model tuning.');
   };
 
   // Toggle monitoring
@@ -361,18 +276,20 @@ export default function App() {
       autoMonitoring: nextState,
       monitoringState: nextState ? 'active' : 'paused',
     };
-    await handleUpdateSettings(updated);
+    await dbService.saveSettings(updated);
+    setSettings(updated);
   };
 
   // Simulate deal burst
   const handleSimulateBurst = async () => {
-    const n1 = generateSimulatedNotification('glitch');
-    const n2 = generateSimulatedNotification('clearance');
-    const n3 = generateSimulatedNotification('coupon');
+    const n = generateSimulatedNotification('glitch');
+    await processNotification(n);
+  };
 
-    await processNotification(n1);
-    await processNotification(n2);
-    await processNotification(n3);
+  const handleSimulateType = async (type: 'glitch' | 'clearance' | 'coupon') => {
+    const n = generateSimulatedNotification(type);
+    await processNotification(n);
+    setCurrentTab('deals');
   };
 
   // Manual ingest
@@ -419,19 +336,18 @@ export default function App() {
         onSimulateBurst={handleSimulateBurst}
         criticalCount={criticalCount}
         savedCount={savedCount}
-        queueCount={0}
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-slate-400 gap-2">
             <span className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-            <span>Initializing DealHunter Database...</span>
+            <span>Loading DealHunter...</span>
           </div>
         ) : (
           <>
-            {currentTab === 'dashboard' && (
+            {currentTab === 'deals' && (
               <DashboardView
                 deals={deals}
                 notificationsCountToday={notifications.length}
@@ -444,28 +360,8 @@ export default function App() {
                 onDismiss={handleDismiss}
                 onPreparePurchase={(d) => setSelectedDeal(d)}
                 onSimulateBurst={handleSimulateBurst}
-              />
-            )}
-
-            {currentTab === 'live_deals' && (
-              <DealsView
-                mode="live"
-                deals={deals}
-                onOpenDetail={(d) => setSelectedDeal(d)}
-                onToggleSave={handleToggleSave}
-                onDismiss={handleDismiss}
-                onPreparePurchase={(d) => setSelectedDeal(d)}
-              />
-            )}
-
-            {currentTab === 'critical' && (
-              <DealsView
-                mode="critical"
-                deals={deals}
-                onOpenDetail={(d) => setSelectedDeal(d)}
-                onToggleSave={handleToggleSave}
-                onDismiss={handleDismiss}
-                onPreparePurchase={(d) => setSelectedDeal(d)}
+                onOpenManualIngest={() => setIsManualIngestOpen(true)}
+                onOpenConnect={() => setCurrentTab('connect')}
               />
             )}
 
@@ -480,7 +376,7 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'notifications' && (
+            {currentTab === 'feed_log' && (
               <NotificationsView
                 notifications={notifications}
                 onReprocess={async (n) => {
@@ -492,37 +388,11 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'accounts' && (
-              <AccountsView
-                accounts={accounts}
-                onSaveAccount={handleSaveAccount}
-                onDeleteAccount={handleDeleteAccount}
-              />
-            )}
-
-            {currentTab === 'rules' && (
-              <RulesView
-                rules={rules}
-                onSaveRule={handleSaveRule}
-                onDeleteRule={handleDeleteRule}
-              />
-            )}
-
-            {currentTab === 'purchases' && (
-              <PurchasesView
-                purchases={purchases}
+            {currentTab === 'connect' && (
+              <ConnectPhoneView
                 settings={settings}
-                onUpdateSettings={handleUpdateSettings}
-                onConfirmPurchase={handleConfirmPurchase}
-                onCancelPurchase={handleCancelPurchase}
-              />
-            )}
-
-            {currentTab === 'settings' && (
-              <SettingsView
-                settings={settings}
-                onUpdateSettings={handleUpdateSettings}
-                onDataImported={refreshData}
+                onSimulateType={handleSimulateType}
+                onOpenManualIngest={() => setIsManualIngestOpen(true)}
               />
             )}
           </>
