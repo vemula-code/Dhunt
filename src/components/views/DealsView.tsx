@@ -114,10 +114,8 @@ export const DealsView: React.FC<DealsViewProps> = ({
             <DealCard
               key={deal.id}
               deal={deal}
-              onOpenDetail={onOpenDetail}
-              onToggleSave={onToggleSave}
+              priorityTier={deal.category === 'price_error' ? 'siren' : deal.score >= 60 ? 'second' : 'regular'}
               onDismiss={onDismiss}
-              onPreparePurchase={onPreparePurchase}
             />
           ))}
         </div>
