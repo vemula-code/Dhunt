@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: 'text/plain' }));
 
 // In-memory queue for incoming Android companion notifications
 interface IngestedNotif {
@@ -45,24 +48,38 @@ if (process.env.GEMINI_API_KEY) {
   }
 }
 
-// 1. Android Notification Ingest Webhook
+// 1. Android Notification Ingest Webhook (supports JSON, form-urlencoded, or plain text from MacroDroid/Tasker/Kotlin)
 app.post('/api/notifications/ingest', (req: Request, res: Response) => {
   try {
-    const { id, sourceAccount, title, rawText, postUrl, receivedAt, isSimulated } = req.body;
+    const body = typeof req.body === 'string' ? { rawText: req.body } : (req.body || {});
+    const id = body.id || req.query.id;
+    const title = String(body.title || req.query.title || '').trim();
+    const rawText = String(body.rawText || body.text || body.message || req.query.text || title || '').trim();
+    let sourceAccount = String(body.sourceAccount || body.account || req.query.account || '').trim();
+    const postUrl = body.postUrl || body.url || null;
+    const receivedAt = body.receivedAt ? Number(body.receivedAt) : Date.now();
+    const isSimulated = body.isSimulated === true || body.isSimulated === 'true';
 
     if (!rawText && !title) {
       res.status(400).json({ error: 'Notification title or rawText is required' });
       return;
     }
 
+    if (!sourceAccount) {
+      const handleMatch = `${title} ${rawText}`.match(/@[A-Za-z0-9_]{1,25}/);
+      sourceAccount = handleMatch ? handleMatch[0] : (title && !title.includes(' ') ? `@${title}` : '@XNotification');
+    } else if (!sourceAccount.startsWith('@')) {
+      sourceAccount = `@${sourceAccount}`;
+    }
+
     const notif: IngestedNotif = {
-      id: id || `android-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      sourceAccount: sourceAccount || '@XNotification',
-      title: title || '',
-      rawText: rawText || title || '',
-      postUrl: postUrl || null,
-      receivedAt: receivedAt || Date.now(),
-      isSimulated: Boolean(isSimulated),
+      id: id ? String(id) : `android-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      sourceAccount,
+      title: title || 'X Deal Alert',
+      rawText,
+      postUrl: postUrl ? String(postUrl) : null,
+      receivedAt,
+      isSimulated,
     };
 
     // Store in pending queue (keep up to 100 recent)
@@ -219,10 +236,15 @@ app.post('/api/verify-url', async (req: Request, res: Response) => {
 
 // Mount Vite or static dist
 async function startServer() {
+  const httpServer = http.createServer(app);
+
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -233,7 +255,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`[DEALHUNTER] Server listening on port ${PORT} (production: ${isProduction})`);
   });
 }

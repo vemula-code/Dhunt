@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
-import { Smartphone, Copy, Check, Send, ShieldCheck, Terminal, BookOpen, X, RefreshCw } from 'lucide-react';
+import { notifier } from '../services/notifier';
+import { Smartphone, Copy, Check, Send, ShieldCheck, X, RefreshCw, BellRing, AlertTriangle } from 'lucide-react';
 
 interface AndroidCompanionModalProps {
   isOpen: boolean;
@@ -20,6 +21,17 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'setup' | 'code' | 'curl'>('setup');
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | 'unsupported'>('default');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        setNotifPerm('unsupported');
+      } else {
+        setNotifPerm(Notification.permission);
+      }
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -47,6 +59,14 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
     navigator.clipboard.writeText(sampleCurl);
     setCopiedCurl(true);
     setTimeout(() => setCopiedCurl(false), 2000);
+  };
+
+  const handleEnableBrowserAlerts = async () => {
+    const perm = await notifier.requestPermission();
+    setNotifPerm(perm);
+    if (perm === 'granted') {
+      notifier.playAlertSound('excellent');
+    }
   };
 
   const handleSendTestWebhook = async () => {
@@ -93,8 +113,8 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
               <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">Android Notification Integration</h2>
-              <p className="text-xs text-slate-400">Native Android listener companion setup & webhook connector</p>
+              <h2 className="text-base sm:text-lg font-bold text-white">Mobile Setup & Permissions</h2>
+              <p className="text-xs text-slate-400">What to enable on your phone for alerts & automatic X syncing</p>
             </div>
           </div>
           <button
@@ -109,17 +129,17 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
         <div className="flex border-b border-slate-800 bg-slate-950/30 text-xs font-semibold px-5">
           <button
             onClick={() => setActiveTab('setup')}
-            className={`py-3 px-3 border-b-2 transition ${
+            className={`py-3 px-3 border-b-2 transition cursor-pointer ${
               activeTab === 'setup'
                 ? 'border-emerald-500 text-emerald-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            Setup Guide
+            Mobile Checklist
           </button>
           <button
             onClick={() => setActiveTab('code')}
-            className={`py-3 px-3 border-b-2 transition ${
+            className={`py-3 px-3 border-b-2 transition cursor-pointer ${
               activeTab === 'code'
                 ? 'border-emerald-500 text-emerald-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -129,7 +149,7 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('curl')}
-            className={`py-3 px-3 border-b-2 transition ${
+            className={`py-3 px-3 border-b-2 transition cursor-pointer ${
               activeTab === 'curl'
                 ? 'border-emerald-500 text-emerald-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -143,10 +163,64 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
         <div className="p-5 sm:p-6 space-y-5 max-h-[70vh] overflow-y-auto text-xs sm:text-sm">
           {activeTab === 'setup' && (
             <div className="space-y-4">
+              {/* Step 1: Mobile PWA Notification Permission Check */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <BellRing className="w-4 h-4 text-amber-400" />
+                    <h4 className="font-bold text-white text-xs sm:text-sm">1. PWA Deal Alerts Permission</h4>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {notifPerm === 'granted'
+                      ? '✅ Enabled! This installed PWA can pop up deal alerts on your phone.'
+                      : notifPerm === 'denied'
+                      ? '❌ Blocked in browser/phone settings. Enable Notifications for this site in your mobile browser settings.'
+                      : notifPerm === 'unsupported'
+                      ? 'ℹ️ On iPhone/iPad, install to Home Screen first via Safari Share > Add to Home Screen, then enable notifications.'
+                      : '⚠️ Not enabled yet. Tap the button to allow urgent deal alerts on your phone.'}
+                  </p>
+                </div>
+                {notifPerm === 'default' && (
+                  <button
+                    onClick={handleEnableBrowserAlerts}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition shrink-0 cursor-pointer"
+                  >
+                    Allow Alerts
+                  </button>
+                )}
+              </div>
+
+              {/* Step 2: Why PWAs can't read notifications directly + Easy 2-Min Solution */}
+              <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-2.5">
+                <div className="flex items-center gap-2 font-bold text-amber-300 text-xs sm:text-sm">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>2. Reading X Notifications Automatically (No Coding Needed!)</span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  <strong>Why a web app/PWA can&apos;t read your notification panel directly:</strong> Android &amp; iOS block all browsers/PWAs from reading notifications belonging to other apps (like X, WhatsApp, or banking apps) for security.
+                </p>
+                <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1.5">
+                  <p className="text-xs font-bold text-emerald-400">
+                    ✅ Easiest Way (2 Mins, No APK Building — Free Play Store App):
+                  </p>
+                  <ol className="space-y-1.5 text-xs text-slate-300 list-decimal list-inside">
+                    <li>Install <strong>MacroDroid</strong> (free on Google Play Store) on your Android phone and grant it <strong>Notification Access</strong> when asked.</li>
+                    <li>Tap <strong>Add Macro</strong> → <strong>Trigger:</strong> <code className="text-amber-300">Device Events &gt; Notification &gt; Notification Received</code> → Select <strong>X (Twitter)</strong> only.</li>
+                    <li><strong>Action:</strong> <code className="text-amber-300">Web Interactions &gt; HTTP Request</code> → Method: <strong>POST</strong> → Paste your Webhook URL below.</li>
+                    <li>Under <strong>Content Body / Parameters</strong> (Form URL-Encoded), add:<br />
+                      <code className="text-emerald-300">title</code> = <code className="text-slate-200">{`{not_title}`}</code> &nbsp;|&nbsp; <code className="text-emerald-300">rawText</code> = <code className="text-slate-200">{`{notification}`}</code>
+                    </li>
+                  </ol>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  *(Advanced users can also build the custom Kotlin <code className="text-amber-300">NotificationListenerService</code> in the second tab instead of MacroDroid.)*
+                </p>
+              </div>
+
               {/* Webhook Endpoint Box */}
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                 <span className="text-xs font-semibold text-slate-300 block">
-                  Your Ingestion Webhook Endpoint:
+                  Your Ingestion Webhook Endpoint (Paste into MacroDroid or Companion):
                 </span>
                 <div className="flex items-center gap-2">
                   <input
@@ -195,7 +269,7 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   Privacy & System Boundary Guarantees
                 </h4>
-                <ul className="space-y-2 text-slate-300 list-disc list-inside">
+                <ul className="space-y-2 text-slate-300 list-disc list-inside text-xs">
                   <li>
                     <strong>X-Only Filtering</strong>: The companion service filters strictly by <code className="text-amber-300">com.twitter.android</code>. Notifications from messages, banking, or personal apps are discarded instantly on-device.
                   </li>
@@ -206,17 +280,6 @@ export const AndroidCompanionModal: React.FC<AndroidCompanionModalProps> = ({
                     <strong>De-duplication</strong>: Built-in LRU cache drops repetitive deal alerts before ingestion.
                   </li>
                 </ul>
-              </div>
-
-              {/* Step by step */}
-              <div className="space-y-2.5 pt-2">
-                <h4 className="font-bold text-white">How to Activate on Android Device:</h4>
-                <ol className="space-y-2 text-slate-300 list-decimal list-inside">
-                  <li>Compile and install the companion APK from the project's <code className="text-amber-300">android/</code> directory onto your Android phone.</li>
-                  <li>Open Android <strong>Settings &gt; Apps &gt; Special App Access &gt; Notification Access</strong> and toggle <strong>DealHunter Companion</strong> ON.</li>
-                  <li>In the companion app, paste your Webhook URL above.</li>
-                  <li>You're all set! Notifications from deal accounts on X will now instantly populate DealHunter.</li>
-                </ol>
               </div>
             </div>
           )}

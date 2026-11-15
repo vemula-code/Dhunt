@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PWAInstallButton } from './PWAInstallButton';
-import { Zap, Sparkles, Volume2, VolumeX, Smartphone } from 'lucide-react';
+import { notifier } from '../services/notifier';
+import { Zap, Sparkles, Volume2, VolumeX, Smartphone, BellRing } from 'lucide-react';
 
 interface HeaderProps {
   soundEnabled: boolean;
@@ -19,6 +20,24 @@ export const Header: React.FC<HeaderProps> = ({
   totalDealsCount,
   glitchCount,
 }) => {
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default');
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setNotifPermission('unsupported');
+    } else {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleRequestAlerts = async () => {
+    const perm = await notifier.requestPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') {
+      notifier.playAlertSound('excellent');
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
@@ -46,6 +65,18 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Prominent PWA Install Button at Top */}
           <PWAInstallButton />
 
+          {/* Enable Mobile Alert Notifications if not granted */}
+          {notifPermission === 'default' && (
+            <button
+              onClick={handleRequestAlerts}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
+              title="Allow DealHunter to send urgent deal alerts"
+            >
+              <BellRing className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Enable Alerts</span>
+            </button>
+          )}
+
           {/* 1-Tap Simulate Deal */}
           <button
             onClick={onSimulateDeal}
@@ -62,7 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onToggleSound}
             className={`p-1.5 rounded-xl border transition cursor-pointer ${
               soundEnabled
-                ? 'bg-slate-900 border-slate-750 text-amber-400'
+                ? 'bg-slate-900 border-slate-700 text-amber-400'
                 : 'bg-slate-900 border-slate-800 text-slate-500'
             }`}
             title={soundEnabled ? 'Mute alert sounds' : 'Enable alert sounds'}
@@ -73,10 +104,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Phone Sync Modal Trigger */}
           <button
             onClick={onOpenPhoneModal}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition cursor-pointer"
-            title="How phone notification syncing works"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition cursor-pointer"
+            title="Mobile permissions & X notification sync setup"
           >
             <Smartphone className="w-4 h-4 text-indigo-400" />
+            <span className="hidden md:inline">Mobile Setup</span>
           </button>
         </div>
       </div>
