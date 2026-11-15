@@ -176,6 +176,15 @@ export default function App() {
     if (urgentToast?.id === dealId) setUrgentToast(null);
   };
 
+  // Restore dismissed deals
+  const handleRestoreDismissed = async () => {
+    const restored = deals.map((d) => (d.isDismissed ? { ...d, isDismissed: false } : d));
+    await Promise.all(
+      deals.filter((d) => d.isDismissed).map((d) => dbService.saveDeal({ ...d, isDismissed: false }))
+    );
+    setDeals(restored);
+  };
+
   // Toggle sound
   const handleToggleSound = async () => {
     const updated = { ...settings, alertSound: !settings.alertSound };
@@ -186,9 +195,9 @@ export default function App() {
     }
   };
 
-  // 1-Tap Simulate Deal
+  // 1-Tap Simulate Deal (rotates cleanly through glitches, steals, coupons, clearance)
   const handleSimulateDeal = async () => {
-    const n = generateSimulatedNotification('glitch');
+    const n = generateSimulatedNotification();
     await processNotification(n);
   };
 
@@ -220,6 +229,7 @@ export default function App() {
             deals={deals}
             onDismiss={handleDismiss}
             onSimulateDeal={handleSimulateDeal}
+            onRestoreDismissed={handleRestoreDismissed}
           />
         )}
       </main>

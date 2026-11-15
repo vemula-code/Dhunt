@@ -7,17 +7,21 @@ interface DashboardViewProps {
   deals: Deal[];
   onDismiss: (dealId: string) => void;
   onSimulateDeal: () => void;
+  onRestoreDismissed?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   deals,
   onDismiss,
   onSimulateDeal,
+  onRestoreDismissed,
 }) => {
   const [search, setSearch] = useState('');
   const [expandedTier1, setExpandedTier1] = useState(false);
   const [expandedTier2, setExpandedTier2] = useState(false);
   const [expandedTier3, setExpandedTier3] = useState(false);
+
+  const dismissedCount = useMemo(() => deals.filter((d) => d.isDismissed).length, [deals]);
 
   // Active (non-dismissed) deals
   const activeDeals = useMemo(() => {
@@ -235,6 +239,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </section>
+
+      {dismissedCount > 0 && onRestoreDismissed && (
+        <div className="pt-2 text-center">
+          <button
+            onClick={onRestoreDismissed}
+            className="text-[11px] text-slate-500 hover:text-slate-300 transition cursor-pointer underline underline-offset-4"
+          >
+            Restore {dismissedCount} closed {dismissedCount === 1 ? 'deal' : 'deals'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
